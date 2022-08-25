@@ -85,7 +85,8 @@ def muzero_policy(
           dirichlet_rng_key,
           jax.nn.softmax(root.prior_logits),
           dirichlet_fraction=dirichlet_fraction,
-          dirichlet_alpha=dirichlet_alpha))
+          dirichlet_alpha=dirichlet_alpha,
+          invalid_actions=invalid_actions))
   root = root.replace(
       prior_logits=_mask_invalid_actions(noisy_logits, invalid_actions))
 
@@ -250,15 +251,16 @@ def _get_logits_from_probs(probs):
 
 
 def _add_dirichlet_noise(rng_key, probs, *, dirichlet_alpha,
-                         dirichlet_fraction):
+                         dirichlet_fraction, invalid_actions):
   """Mixes the probs with Dirichlet noise."""
   chex.assert_rank(probs, 2)
   chex.assert_type([dirichlet_alpha, dirichlet_fraction], float)
 
   batch_size, num_actions = probs.shape
+  alpha = jnp.where(invalid_actions, 0, jnp.full([num_actions], fill_value=dirichlet_alpha))
   noise = jax.random.dirichlet(
       rng_key,
-      alpha=jnp.full([num_actions], fill_value=dirichlet_alpha),
+      alpha=alpha,
       shape=(batch_size,))
   noisy_probs = (1 - dirichlet_fraction) * probs + dirichlet_fraction * noise
   return noisy_probs
